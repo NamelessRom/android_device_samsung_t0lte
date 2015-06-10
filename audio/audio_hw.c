@@ -255,6 +255,7 @@ void setCsdHandle(void* handle)
 
 static void select_output_device(struct m0_audio_device *adev);
 static void select_input_device(struct m0_audio_device *adev);
+static void set_noise_supression(struct m0_audio_device *adev, int enable);
 static int adev_set_voice_volume(struct audio_hw_device *dev, float volume);
 static int do_input_standby(struct m0_stream_in *in);
 static int do_output_standby(struct m0_stream_out *out);
@@ -779,9 +780,11 @@ static void select_output_device(struct m0_audio_device *adev)
         if (speaker_on || earpiece_on || headphone_on) {
             ALOGD("%s: set voicecall route: default_input", __func__);
             set_bigroute_by_array(adev->mixer, default_input, 1);
+            set_noise_supression(adev, 1);
         } else {
             ALOGD("%s: set voicecall route: default_input_disable", __func__);
             set_bigroute_by_array(adev->mixer, default_input_disable, 1);
+            set_noise_supression(adev, 0);
         }
 
         if (headset_on) {
@@ -829,6 +832,19 @@ static void select_input_device(struct m0_audio_device *adev)
     }
 
     select_devices(adev);
+}
+
+static void set_noise_supression(struct m0_audio_device *adev, int enable)
+{
+    if (enable) {
+        // Enable Noise suppression for builtin microphone
+        ALOGE("%s: enabling two mic control", __func__);
+        set_bigroute_by_array(adev->mixer, noise_suppression, 1);
+    } else {
+        // Disable Noise suppression for builtin microphone
+        ALOGE("%s: disabling two mic control", __func__);
+        set_bigroute_by_array(adev->mixer, noise_suppression_disable, 1);
+    }
 }
 
 /* must be called with hw device and output stream mutexes locked */
@@ -2685,20 +2701,6 @@ static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
                 ALOGE("%s: disabling csd_wide_voice", __func__);
                 csd_wide_voice(VX_NB_SAMPLING_RATE);
             }
-        }
-    }
-
-    // FIXME
-    ret = str_parms_get_str(parms, "noise_suppression", value, sizeof(value));
-    if (ret >= 0) {
-        if (strcmp(value, "true") == 0) {
-            ALOGE("%s: enabling two mic control", __func__);
-            /* sub mic */
-            set_bigroute_by_array(adev->mixer, noise_suppression, 1);
-        } else {
-            ALOGE("%s: disabling two mic control", __func__);
-            /* sub mic */
-            set_bigroute_by_array(adev->mixer, noise_suppression_disable, 1);
         }
     }
 
